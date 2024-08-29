@@ -25,6 +25,8 @@ RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     lsb-release \
     python3-opencv \
+    alsa-utils \
+    portaudio19-dev \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 

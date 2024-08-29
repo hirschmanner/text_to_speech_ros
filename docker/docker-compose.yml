@@ -9,6 +9,7 @@ services:
     runtime: "nvidia"
     volumes:
       - ..:/catkin_ws/src/coqui_tts
+      - /home/matthias/research/speech_recognition_ros:/catkin_ws/src/speech_recognition_ros
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /etc/localtime:/etc/localtime:ro
       - $HOME/vscode-server:$HOME/.vscode-server

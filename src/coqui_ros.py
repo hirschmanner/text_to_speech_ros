@@ -3,7 +3,7 @@
 import rospy
 from std_msgs.msg import String
 from audio_common_msgs.msg import AudioData
-from std_msgs.msg import String
+from std_msgs.msg import String, Bool
 import wave
 import scipy
 import numpy as np
@@ -12,6 +12,8 @@ from io import BytesIO
 
 import torch
 from TTS.api import TTS
+import nltk
+
 
 # Get device
 #device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -53,9 +55,13 @@ class AudioStreamer:
         # Audio coding format (e.g. WAVE, MP3)
         self.coding_format = "wav"
 
+        # NLTK Tokenizer to split sentences
+        self.tokenizer = nltk.data.load('tokenizers/punkt/german.pickle')
+
         # Init TTS
         self.tts = TTS(tts_model).to(device)
-        self.audio_pub = rospy.Publisher(audio_pub_topic, AudioData, queue_size=100)
+        self.audio_pub = rospy.Publisher(f"{audio_pub_topic}/audio", AudioData, queue_size=100)
+        self.robot_is_speaking = rospy.Publisher(f"{audio_pub_topic}/active_trigger", Bool, queue_size=1)
         self.tts_sub = rospy.Subscriber(text_sub_topic, String, self.tts_callback)
 
 
@@ -83,42 +89,46 @@ class AudioStreamer:
                 rospy.sleep(1.0 / frame_rate)
 
     def tts_callback(self, msg):
+        sentence_list = self.tokenizer.tokenize(msg.data)
+        for sentence in sentence_list:
+            if 'multilingual' in self.tts.model_name:
+                wav = np.array(self.tts.tts(text=sentence, 
+                                            speaker_wav='/catkin_ws/src/coqui_tts/spongebob_short.wav', 
+                                            language='de'))
+            else:
+                wav = np.array(self.tts.tts(text=sentence))
+            wav_norm = wav * (32767 / max(0.01, np.max(np.abs(wav))))
 
-        if 'multilingual' in self.tts.model_name:
-            wav = np.array(self.tts.tts(text=msg.data, 
-                                        speaker_wav='/catkin_ws/src/coqui_tts/spongebob_short.wav', 
-                                        language='de'))
-        else:
-            wav = np.array(self.tts.tts(text=msg.data))
-        wav_norm = wav * (32767 / max(0.01, np.max(np.abs(wav))))
+            wav_norm = wav_norm.astype(np.int16)
 
-        wav_norm = wav_norm.astype(np.int16)
-
-        #sample_width = wav.getsampwidth()
-        sample_width = 320
-        sample_rate = 16000
-        channels = 2
-        wav_buffer = BytesIO()
-        scipy.io.wavfile.write(wav_buffer, sample_rate, wav_norm)
-        wav_buffer.seek(0)
-        audio_msg = AudioData()
-        rate = rospy.Rate(self.framewidth//2)
-        for i in range(int(len(wav_norm)//self.framewidth)):
-            audio_msg.data = wav_norm[i*self.framewidth:i*self.framewidth+self.framewidth].tobytes()
-            #audio_msg.format = "wav"
-            #audio_msg.sample_rate = sample_rate
-            #audio_msg.channels = channels
-            #audio_msg.sample_width = sample_width
-            self.audio_pub.publish(audio_msg)
-            rate.sleep()
+            #sample_width = wav.getsampwidth()
+            #sample_rate = 16000
+            #channels = 2
+            #wav_buffer = BytesIO()
+            #scipy.io.wavfile.write(wav_buffer, sample_rate, wav_norm)
+            #wav_buffer.seek(0)
+            audio_msg = AudioData()
+            rate = rospy.Rate(self.framewidth//2)
+            rate = rospy.Rate(self.sample_rate//self.framewidth)
+            self.robot_is_speaking.publish(Bool(True))
+            for i in range(int(len(wav_norm)//self.framewidth)):
+                audio_msg.data = wav_norm[i*self.framewidth:i*self.framewidth+self.framewidth].tobytes()
+                #audio_msg.format = "wav"
+                #audio_msg.sample_rate = sample_rate
+                #audio_msg.channels = channels
+                #audio_msg.sample_width = sample_width
+                self.audio_pub.publish(audio_msg)
+                rate.sleep()
+            rospy.sleep(0.5)
+            self.robot_is_speaking.publish(Bool(False))
 
     def run(self):
         rospy.spin()
 
 if __name__ == '__main__':
     rospy.init_node('audio_streamer', anonymous=True)
-    audio_streamer = AudioStreamer(tts_model = "tts_models/multilingual/multi-dataset/xtts_v2", # "tts_models/de/thorsten/vits"
-                                   audio_pub_topic='/audio/audio', 
+    audio_streamer = AudioStreamer(tts_model = "tts_models/de/thorsten/vits",#tts_models/multilingual/multi-dataset/xtts_v2", # "tts_models/de/thorsten/vits"
+                                   audio_pub_topic='/audio_tts', 
                                    text_sub_topic = '/tts_request')
     try: 
         audio_streamer.run()
