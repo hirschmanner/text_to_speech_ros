@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.8.0-base-ubuntu20.04 AS coqui_tts
+FROM nvidia/cuda:12.1.1-base-ubuntu20.04 AS coqui_tts
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -16,9 +16,10 @@ RUN ln -sv /usr/bin/python3.9 /usr/bin/python
 
 
 
-# RUN wget https://bootstrap.pypa.io/get-pip.py && \
-# 	python3 get-pip.py && \
-# 	rm get-pip.py
+
+RUN wget https://bootstrap.pypa.io/get-pip.py && \
+	python3 get-pip.py && \
+	rm get-pip.py
 
 # install lsb-release and curl
 RUN apt-get update \
@@ -27,8 +28,15 @@ RUN apt-get update \
     python3-opencv \
     alsa-utils \
     portaudio19-dev \
+    python3-dev \
+    python3-tk \
+    espeak \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
+
+ RUN wget https://bootstrap.pypa.io/get-pip.py && \
+	python get-pip.py && \
+	rm get-pip.py
 
 # add the keys
 RUN sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros-latest.list'
@@ -69,10 +77,11 @@ RUN sudo rosdep init
 RUN rosdep update
 RUN mkdir -p /catkin_ws/src
 RUN cd /catkin_ws/src
-RUN cd /catkin_ws/
 RUN source ~/.bashrc
-RUN /bin/bash -c  '. /opt/ros/noetic/setup.bash; cd /catkin_ws; catkin config -DPYTHON_EXECUTABLE=/usr/bin/python3 -DPYTHON_INCLUDE_DIR=/usr/include/python3.6m -DPYTHON_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.6m.so; catkin build'
-#RUN catkin_make
+RUN /bin/bash -c  '. /opt/ros/noetic/setup.bash; cd /catkin_ws; catkin config -DPYTHON_EXECUTABLE=/usr/bin/python; catkin build'
+RUN cd /catkin_ws/
+WORKDIR /catkin_ws
+RUN catkin build
 RUN echo "source /catkin_ws/devel/setup.bash" >> ~/.bashrc
 
 

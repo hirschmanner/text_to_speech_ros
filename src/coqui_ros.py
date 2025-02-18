@@ -13,7 +13,10 @@ from io import BytesIO
 import torch
 from TTS.api import TTS
 import nltk
+nltk.download('punkt_tab')
 
+import torch
+print(f"Cuda is available: {torch.cuda.is_available()}")
 
 # Get device
 #device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -32,7 +35,8 @@ import nltk
 # tts.tts_to_file(text="Hello world!", speaker_wav="my/cloning/audio.wav", language="en", file_path="output.wav")
 
 
-
+#  To run the audio play on sasha call:
+# roslaunch audio_play play.launch audio_topic:=/audio_tts/audio format:=wave sample_rate:=22050
 
 
 
@@ -63,7 +67,8 @@ class AudioStreamer:
         self.audio_pub = rospy.Publisher(f"{audio_pub_topic}/audio", AudioData, queue_size=100)
         self.robot_is_speaking = rospy.Publisher(f"{audio_pub_topic}/active_trigger", Bool, queue_size=1)
         self.tts_sub = rospy.Subscriber(text_sub_topic, String, self.tts_callback)
-
+        self.robot_is_speaking.publish(Bool(False))
+        rospy.loginfo("Ready to Speak some German!")
 
     def stream_wav_file(self, file_path):
         with wave.open(file_path, 'rb') as wav_file:
@@ -93,10 +98,10 @@ class AudioStreamer:
         for sentence in sentence_list:
             if 'multilingual' in self.tts.model_name:
                 wav = np.array(self.tts.tts(text=sentence, 
-                                            speaker_wav='/catkin_ws/src/coqui_tts/spongebob_short.wav', 
+                                            speaker_wav='/catkin_ws/src/coqui_tts/markus_wien2.wav', 
                                             language='de'))
             else:
-                wav = np.array(self.tts.tts(text=sentence))
+                wav = np.array(self.tts.tts(text=sentence, ))
             wav_norm = wav * (32767 / max(0.01, np.max(np.abs(wav))))
 
             wav_norm = wav_norm.astype(np.int16)
@@ -119,15 +124,16 @@ class AudioStreamer:
                 #audio_msg.sample_width = sample_width
                 self.audio_pub.publish(audio_msg)
                 rate.sleep()
-            rospy.sleep(0.5)
-            self.robot_is_speaking.publish(Bool(False))
+            #rospy.sleep(1.)
+        rospy.sleep(1.)
+        self.robot_is_speaking.publish(Bool(False))
 
     def run(self):
         rospy.spin()
 
 if __name__ == '__main__':
     rospy.init_node('audio_streamer', anonymous=True)
-    audio_streamer = AudioStreamer(tts_model = "tts_models/de/thorsten/vits",#tts_models/multilingual/multi-dataset/xtts_v2", # "tts_models/de/thorsten/vits"
+    audio_streamer = AudioStreamer(tts_model = "tts_models/de/thorsten/tacotron2-DDC", #"tts_models/de/css10/vits-neon",#tts_models/de/thorsten/vits", #"tts_models/multilingual/multi-dataset/xtts_v2", # "tts_models/de/thorsten/vits"
                                    audio_pub_topic='/audio_tts', 
                                    text_sub_topic = '/tts_request')
     try: 
